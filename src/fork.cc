@@ -1,4 +1,4 @@
-// hello.cc
+// fork.cc
 #include <node.h>
 #include <unistd.h>
 #include <string.h>
@@ -6,7 +6,7 @@
 #include <sys/wait.h>
 #include <iostream>
 
-__asm__(".symver string,string@GLIBC_2.17");
+//__asm__(".symver string,string@GLIBC_2.17");
 
 namespace nodefork {
   
@@ -14,6 +14,7 @@ namespace nodefork {
   using v8::Isolate;
   using v8::Local;
   using v8::Object;
+  using v8::Context;
   using v8::Number;
   using v8::String;
   using v8::Value;
@@ -21,7 +22,7 @@ namespace nodefork {
   
   void Fork(const FunctionCallbackInfo<Value>& args) {
     Isolate* isolate = args.GetIsolate();
-    
+
     pid_t pid = fork();
 
     Local<Number> num = Number::New(isolate, pid);
@@ -43,20 +44,24 @@ namespace nodefork {
     
     Isolate* isolate = args.GetIsolate();
 
-    Local<Object> obj = Object::New(isolate);
-    
-    obj->Set(String::NewFromUtf8(isolate, "write_end"), Number::New(isolate, pfds[1]));
-    obj->Set(String::NewFromUtf8(isolate, "read_end"),  Number::New(isolate, pfds[0]));
+    const Local<Object> obj = Object::New(isolate);
+    Local<Context> ctx = isolate->GetCurrentContext();
+
+    obj->Set(ctx, String::NewFromUtf8(isolate, "write_end").ToLocalChecked(), Number::New(isolate, pfds[1]));
+    obj->Set(ctx, String::NewFromUtf8(isolate, "read_end").ToLocalChecked(),  Number::New(isolate, pfds[0]));
 
     args.GetReturnValue().Set(obj);
   }
   
   void WriteToPipe(const FunctionCallbackInfo<Value>& args) {
-    int pipe = args[0]->NumberValue();
+    Isolate* isolate = args.GetIsolate();
+    Local<Context> ctx = isolate->GetCurrentContext();
+
+    int pipe = args[0]->NumberValue(ctx).ToChecked();
     
     char* message;
     
-    v8::String::Utf8Value str(args[1]->ToString());
+    v8::String::Utf8Value str(isolate, args[1]->ToString(ctx).ToLocalChecked());
     message = *str;
 
     write(pipe, message, strlen(message));
@@ -65,8 +70,9 @@ namespace nodefork {
 
   void ReadFromPipe(const FunctionCallbackInfo<Value>& args) { 
     Isolate* isolate = args.GetIsolate();
+    Local<Context> ctx = isolate->GetCurrentContext();
     
-    int pipe = args[0]->NumberValue();
+    int pipe = args[0]->NumberValue(ctx).ToChecked();
 
     char buf[100];
     
@@ -131,11 +137,14 @@ namespace nodefork {
     //   os << buf;
     // }
 
-    args.GetReturnValue().Set(String::NewFromUtf8(isolate,res));//os.str().c_str()));//str.c_str()));//buf));
+    args.GetReturnValue().Set(String::NewFromUtf8(isolate,res).ToLocalChecked());//os.str().c_str()));//str.c_str()));//buf));
   }
 
   void Close(const FunctionCallbackInfo<Value>& args) { 
-    int pipe = args[0]->NumberValue();
+    Isolate* isolate = args.GetIsolate();
+    Local<Context> ctx = isolate->GetCurrentContext();
+
+    int pipe = args[0]->NumberValue(ctx).ToChecked();
 
     close(pipe);
   }
